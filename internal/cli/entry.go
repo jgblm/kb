@@ -5,6 +5,7 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"sort"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -363,20 +364,12 @@ func writeCounts(title string, counts map[string]int) {
 	for key := range counts {
 		keys = append(keys, key)
 	}
-	sortStrings(keys)
+	sort.Strings(keys)
 	parts := make([]string, 0, len(keys))
 	for _, key := range keys {
 		parts = append(parts, fmt.Sprintf("%s=%d", key, counts[key]))
 	}
 	fmt.Printf("%s     %s\n", title, strings.Join(parts, "  "))
-}
-
-func sortStrings(items []string) {
-	for i := 1; i < len(items); i++ {
-		for j := i; j > 0 && items[j-1] > items[j]; j-- {
-			items[j-1], items[j] = items[j], items[j-1]
-		}
-	}
 }
 
 func newEditCommand() *cobra.Command {
