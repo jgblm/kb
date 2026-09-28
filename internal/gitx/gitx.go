@@ -4,7 +4,9 @@ package gitx
 import (
 	"errors"
 	"fmt"
+	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 )
 
@@ -52,13 +54,27 @@ func Run(dir string, args ...string) (string, error) {
 	return out, nil
 }
 
-// IsRepo dir 是否为 git 工作区。
+// IsRepo dir 是否为某个 git 工作区**的一部分**（含位于仓库内层的目录）。
 func IsRepo(dir string) bool {
 	if !Available() {
 		return false
 	}
 	code, out, _, err := RunRaw(dir, "rev-parse", "--is-inside-work-tree")
 	return err == nil && code == 0 && out == "true"
+}
+
+// HasOwnRepo dir 自身是否就是 git 仓库根（存在 dir/.git）。
+//
+// 不能用 IsRepo 代替：IsRepo 基于 `rev-parse --is-inside-work-tree`，
+// 对位于某仓库**内层**的目录同样返回 true。
+// 知识库必须拥有自己的仓库，否则 kb 的自动提交会落到外层仓库上 ——
+// 那等于把私人笔记 commit 进别人的代码库，直接违反「独立仓库」的设计前提。
+func HasOwnRepo(dir string) bool {
+	if dir == "" {
+		return false
+	}
+	_, err := os.Stat(filepath.Join(dir, ".git"))
+	return err == nil
 }
 
 // RepoRoot 返回仓库根目录绝对路径。
@@ -115,10 +131,17 @@ func DefaultBranch(dir string) string {
 	return "main"
 }
 
-// Init 初始化仓库（已存在则无操作）。
+// Init 初始化仓库（自身已是仓库则无操作）。
+//
+// 用 HasOwnRepo 而非 IsRepo：知识库可能被建在某个代码仓库内部
+// （例如仓库根下的 .kb-notes/），此时必须建出**嵌套的独立仓库**，
+// 而不是因为「已经身处某个工作区」就跳过。
 func Init(dir, branch string) error {
-	if IsRepo(dir) {
+	if HasOwnRepo(dir) {
 		return nil
+	}
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return err
 	}
 	_, err := Run(dir, "init", "-b", branch)
 	return err
@@ -137,7 +160,13 @@ func StatusPorcelain(dir string) string {
 func IsClean(dir string) bool { return strings.TrimSpace(StatusPorcelain(dir)) == "" }
 
 // CommitAll 把所有改动 add 并 commit。无改动时返回 ("", nil)。
+//
+// 硬性要求 dir 自身是仓库根：这是最后一道防线，防止调用方误传一个
+// 「位于别的仓库内部」的目录，导致提交落进那个无关仓库。
 func CommitAll(dir, message string) (string, error) {
+	if !HasOwnRepo(dir) {
+		return "", fmt.Errorf("%s 不是独立的 git 仓库（缺少 .git），拒绝提交以避免写入外层仓库", dir)
+	}
 	if strings.TrimSpace(StatusPorcelain(dir)) == "" {
 		return "", nil
 	}

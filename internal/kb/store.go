@@ -60,13 +60,17 @@ func Open(root string) (*KB, error) {
 }
 
 // InitOptions kb init 的参数。
+//
+// 都用「否定式」字段，让零值等于文档里的默认行为（InitOptions{} 即「默认来一套」）。
+// 早先写的是 AutoCommit bool，于是 InitOptions{} 会静默关掉自动提交，
+// 与 config schema 里 default: true 的约定相反。
 type InitOptions struct {
 	// Repos 初始纳管的代码仓库。
 	Repos []config.RepoConfig
 	// Force 已存在时也重建缺失的目录。
 	Force bool
-	// AutoCommit 是否开启自动提交（默认 true）。
-	AutoCommit bool
+	// DisableAutoCommit 关闭编辑后的自动提交（默认开启）。
+	DisableAutoCommit bool
 	// NoGit 跳过 git init。
 	NoGit bool
 }
@@ -81,7 +85,7 @@ func Init(root string, opts InitOptions) (*KB, error) {
 		}
 		cfg = config.Default(resolved)
 	}
-	cfg.Git.AutoCommit = opts.AutoCommit
+	cfg.Git.AutoCommit = !opts.DisableAutoCommit
 
 	for _, repo := range opts.Repos {
 		if repo.PrimaryBranch == "" {
@@ -563,7 +567,9 @@ func (kb *KB) saveLocked(action, entryID string) (string, error) {
 	if action == "" || !kb.Config.Git.AutoCommit {
 		return "", nil
 	}
-	if !gitx.IsRepo(kb.Config.Root) {
+	// 必须用 HasOwnRepo：知识库若被放在某个代码仓库内部，
+	// 用 IsRepo 会判定为 true 并把笔记提交进那个仓库。
+	if !gitx.HasOwnRepo(kb.Config.Root) {
 		return "", nil
 	}
 	message := kb.Config.RenderCommitMessage(action, entryID)

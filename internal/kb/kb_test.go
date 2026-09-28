@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/stone/kb/internal/config"
+	"github.com/stone/kb/internal/gitx"
 	"github.com/stone/kb/internal/model"
 )
 
@@ -34,8 +35,8 @@ func newTestKB(t *testing.T) (*KB, string, string) {
 			Path:          codeRepo,
 			PrimaryBranch: "main",
 		}},
-		AutoCommit: false,
-		NoGit:      true,
+		DisableAutoCommit: true,
+		NoGit:             true,
 	})
 	if err != nil {
 		t.Fatalf("Init 失败: %v", err)
@@ -51,6 +52,17 @@ func writeFile(t *testing.T, path, content string) {
 	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
 		t.Fatal(err)
 	}
+}
+
+// samePath 比较两个路径是否指向同一位置（自动解析符号链接）。
+func samePath(a, b string) bool {
+	resolve := func(p string) string {
+		if resolved, err := filepath.EvalSymlinks(p); err == nil {
+			return resolved
+		}
+		return p
+	}
+	return resolve(a) == resolve(b)
 }
 
 func TestAddWritesMirroredDoc(t *testing.T) {
@@ -355,5 +367,67 @@ func TestAddWithoutAnchorGoesToGlobalFolder(t *testing.T) {
 	report, _ := instance.ApplyChange("auth-service", []string{"pkg/db/pool.go"})
 	if len(report.Stale) != 0 {
 		t.Fatal("无锚点条目不该被标记 stale")
+	}
+}
+
+// TestInitInsideExistingRepoCreatesNestedRepo 回归测试。
+//
+// 背景：gitx.IsRepo 基于 `rev-parse --is-inside-work-tree`，对位于某仓库**内层**的
+// 目录同样返回 true。于是把知识库建在已有代码仓库内部时，kb init 会误判为
+// 「已经是仓库」而跳过 git init，导致：
+//  1. 知识库没有自己的历史（§5.3 版本管理静默失效）
+//  2. kb 的自动提交落到外层仓库上 —— 私人笔记被 commit 进代码库
+func TestInitInsideExistingRepoCreatesNestedRepo(t *testing.T) {
+	if !gitx.Available() {
+		t.Skip("需要系统 git")
+	}
+	t.Setenv("KB_NO_REMEMBER", "1")
+
+	outer := t.TempDir()
+	if err := gitx.Init(outer, "main"); err != nil {
+		t.Skipf("无法在临时目录建 git 仓库: %v", err)
+	}
+	writeFile(t, filepath.Join(outer, "main.go"), "package main\n")
+	if _, err := gitx.CommitAll(outer, "fixture"); err != nil {
+		t.Skipf("无法提交（多半缺 git user 配置）: %v", err)
+	}
+	outerHead := gitx.HeadCommit(outer)
+
+	kbRoot := filepath.Join(outer, "notes")
+	instance, err := Init(kbRoot, InitOptions{})
+	if err != nil {
+		t.Fatalf("Init 失败: %v", err)
+	}
+
+	if !gitx.HasOwnRepo(kbRoot) {
+		t.Fatal("知识库建在已有仓库内部时，必须建出嵌套的独立仓库")
+	}
+	// git 返回的是解析过符号链接的真实路径（macOS 上 /var 是 /private/var 的软链），
+	// 所以两边都要 EvalSymlinks 之后再比
+	if own, err := gitx.RepoRoot(kbRoot); err != nil || !samePath(own, kbRoot) {
+		t.Fatalf("从知识库内解析到的仓库根应为它自己，got %q (err=%v)", own, err)
+	}
+	if !instance.Config.Git.AutoCommit {
+		t.Fatal("InitOptions{} 的零值语义应为「自动提交开启」，与 config schema 的 default 一致")
+	}
+
+	// 写一条知识：提交必须落在知识库自己的仓库
+	if _, err := instance.Add(AddOptions{Symptom: "嵌套知识库不应污染外层仓库"}); err != nil {
+		t.Fatal(err)
+	}
+	if got := gitx.HeadCommit(outer); got != outerHead {
+		t.Fatalf("外层仓库被写入了提交：%s -> %s", outerHead, got)
+	}
+	if gitx.HeadCommit(kbRoot) == "" {
+		t.Fatal("知识库自己的仓库里应有提交")
+	}
+
+	// 最后一道防线：CommitAll 拒绝对「非仓库根」的目录提交
+	notRepoRoot := filepath.Join(outer, "pkg")
+	if err := os.MkdirAll(notRepoRoot, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := gitx.CommitAll(notRepoRoot, "nope"); err == nil {
+		t.Fatal("对不是仓库根的目录提交应当被拒绝")
 	}
 }

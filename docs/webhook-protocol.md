@@ -103,8 +103,35 @@ POST /webhook
 重复投递同一 commit 只返回 `idempotent: true`，不重复处理。
 该文件在 `.gitignore` 里，不进版本库。
 
-## 5. Git hook
+## 5. 上报端（`kb notify`）的失败策略
 
+`kb notify` 只在「收到本知识库的 200 + `ok:true`」时才算送达。其余一切情况都
+**把事件写入 `<kb-root>/.kb/outbox.jsonl` 排队**，而不是丢掉：
+
+| 情况 | 判定 | 处理 |
+|---|---|---|
+| 连接被拒 / 超时 | `ok` 无响应 | 排队 |
+| 端口上蹲着别的东西（响应不是 kb 的 JSON） | 解析失败 | 排队 |
+| 端口上是**另一个** kb 实例 | `ok:false`，`error` 含「未在 kb 配置中」 | 排队 |
+| 分支不在主干 | `ok:true` + `skipped` | 已处理，不排队 |
+| 重复 commit | `ok:true` + `idempotent` | 已处理，不排队 |
+
+排队的事件会在下次 `kb serve` 启动时补投。
+
+> 为什么 `ok:false` 也要排队：同一台机器上跑多个知识库时，默认端口都是 7777。
+> 如果 A 的服务没起来而 B 的服务占着 7777，A 的 hook 上报就会打到 B 上。
+> 若此时直接丢弃，A 的代码变更就永久丢失了 —— 排队至少保留了下一次机会。
+
+### 多知识库共存
+
+`KB_HOST` / `KB_WEBHOOK_PORT` / `KB_UI_PORT` 三个环境变量会覆盖配置里的监听设置，
+用来避免端口冲突（值非法时忽略）：
+
+```bash
+KB_WEBHOOK_PORT=7877 KB_UI_PORT=7878 kb serve --kb ~/other-kb
+```
+
+## 6. Git hook
 ### 关于 `post-push` 的更正
 
 需求 §3.1 写的是安装 `post-push` hook，但 **Git 不存在这个钩子**。
@@ -141,7 +168,7 @@ exit 0
 下次 `kb serve` 启动时会自动补投（日志里能看到「已补投 N 条积压的变更事件」）。
 这是对需求的一处健壮性补强——原设计里服务没起就等于丢事件。
 
-## 6. 手动验证
+## 7. 手动验证
 
 ```bash
 kb serve &

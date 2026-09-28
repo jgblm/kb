@@ -17,6 +17,10 @@ KEEP=0
 
 # 不污染 ~/.config/kb/root 与全局环境；后续命令用 KB_ROOT 定位知识库
 export KB_NO_REMEMBER=1
+# 把监听端口钉死在本测试自己的端口上：默认 7777/7778 可能被同机器上别的 kb 实例占着，
+# 那样「服务未启动」这一步的 notify 会打到别人的服务上，测试就不再是隔离的。
+export KB_WEBHOOK_PORT=17777
+export KB_UI_PORT=17778
 # 本机可能有全局 HTTP 代理，localhost 请求必须绕过，否则探活会被代理的 502 干扰
 export NO_PROXY="127.0.0.1,localhost,::1"
 export no_proxy="$NO_PROXY"
@@ -264,6 +268,19 @@ echo "$REINDEX_OUT" | sed 's/^/    /'
 VALIDATE_OUT="$("$KB_BIN" validate 2>&1)"
 echo "$VALIDATE_OUT" | sed 's/^/    /'
 check "校验通过（无缺失文档）" "echo \"\$VALIDATE_OUT\" | grep -q '没有发现问题'"
+
+step "回归 · 知识库建在已有 git 仓库内部时必须是嵌套独立仓库"
+# 曾经的缺陷：git rev-parse --is-inside-work-tree 对仓库内层目录也返回 true，
+# 于是 kb init 误判「已是仓库」而跳过 git init，自动提交会落到外层仓库上。
+INNER="$CODE/.kb-notes"
+OUTER_HEAD_BEFORE="$(git -C "$CODE" rev-parse HEAD)"
+"$KB_BIN" init --path "$INNER" --repo "auth-service=$CODE" >/dev/null 2>&1
+check "嵌套知识库拥有自己的 .git" "test -d '$INNER/.git'"
+check "从知识库内解析到的仓库根是它自己" "test \"\$(cd '$INNER' && git rev-parse --show-toplevel)\" = \"\$(cd '$INNER' && pwd -P)\""
+check "init 提示了外层仓库需要加 .gitignore" "\"\$KB_BIN\" init --path '$INNER' --repo 'auth-service=$CODE' 2>&1 | grep -q 'gitignore'"
+(cd "$CODE" && "$KB_BIN" add "嵌套知识库不该污染外层仓库" --at api/order.go --repo auth-service --kb "$INNER" >/dev/null 2>&1)
+check "写入知识后外层仓库 HEAD 未变" "test \"\$(git -C '$CODE' rev-parse HEAD)\" = '$OUTER_HEAD_BEFORE'"
+check "提交落在了知识库自己的仓库里" "test \"\$(git -C '$INNER' rev-list --count HEAD)\" -ge 2"
 
 step "收尾"
 kill "$SERVE_PID" 2>/dev/null

@@ -251,7 +251,7 @@ func (kb *KB) Status(repoFilter string) *StatusReport {
 		}
 	}
 
-	if gitx.IsRepo(kb.Config.Root) {
+	if gitx.HasOwnRepo(kb.Config.Root) {
 		report.Stats.LastCommit = gitx.HeadCommit(kb.Config.Root)
 	}
 	sort.Strings(report.Stats.Orphans)

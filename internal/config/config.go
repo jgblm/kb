@@ -16,6 +16,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 
 	"gopkg.in/yaml.v3"
@@ -186,6 +187,40 @@ func (c *Config) Save() error {
 	return os.WriteFile(c.ConfigPath(), payload, 0o644)
 }
 
+// 环境变量可覆盖监听配置，方便在同一台机器上同时跑多个知识库
+// （否则两个都用默认 7777/7778，后起的那个会绑不上端口）。
+const (
+	EnvHost        = "KB_HOST"
+	EnvWebhookPort = "KB_WEBHOOK_PORT"
+	EnvUIPort      = "KB_UI_PORT"
+)
+
+// ApplyEnvOverrides 用 KB_HOST / KB_WEBHOOK_PORT / KB_UI_PORT 覆盖监听配置。
+// 值非法时忽略（不因为一个坏环境变量就让命令失败）。
+func (c *Config) ApplyEnvOverrides() {
+	if value := strings.TrimSpace(os.Getenv(EnvHost)); value != "" {
+		c.Server.Host = value
+	}
+	if port, ok := parsePort(os.Getenv(EnvWebhookPort)); ok {
+		c.Server.WebhookPort = port
+	}
+	if port, ok := parsePort(os.Getenv(EnvUIPort)); ok {
+		c.Server.UIPort = port
+	}
+}
+
+func parsePort(raw string) (int, bool) {
+	value := strings.TrimSpace(raw)
+	if value == "" {
+		return 0, false
+	}
+	port, err := strconv.Atoi(value)
+	if err != nil || port < 1 || port > 65535 {
+		return 0, false
+	}
+	return port, true
+}
+
 // Load 从知识库根目录读取配置。
 func Load(root string) (*Config, error) {
 	resolved := ExpandUser(root)
@@ -218,6 +253,7 @@ func Load(root string) (*Config, error) {
 			cfg.Repos[index].PrimaryBranch = "main"
 		}
 	}
+	cfg.ApplyEnvOverrides()
 	return cfg, nil
 }
 

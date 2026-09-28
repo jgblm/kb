@@ -226,6 +226,33 @@ v1 改成**显式命令** `kb migrate --scan`（只看候选）/ `--scan --apply
 `KB` 内部一把 `sync.RWMutex`。读接口一律返回 `Entry.Clone()`，
 避免锁外共享可变指针（webhook 与 UI 在同一进程里并发跑，`go test -race` 干净）。
 
+### 知识库一定是「自己的」仓库
+
+`gitx` 里有两个容易混淆的判断：
+
+| 函数 | 语义 | 用途 |
+|---|---|---|
+| `IsRepo(dir)` | dir **位于**某个工作区内（含内层目录） | 判断代码仓库 |
+| `HasOwnRepo(dir)` | dir **自身**就是仓库根（存在 `dir/.git`） | 判断知识库 |
+
+两者绝不能互换。踩过的坑：`kb init` 原本用 `IsRepo` 判断「是否已经是仓库」，
+于是把知识库建在**已有代码仓库内部**时（例如 `my-repo/.kb-notes/`），
+`rev-parse --is-inside-work-tree` 返回 true，`git init` 被跳过 —— 知识库没有自己的
+历史，而 `kb` 的自动提交会落进**外层代码仓库**，等于把私人笔记 commit 进项目里。
+
+现在：`Init` 用 `HasOwnRepo` 建出嵌套的独立仓库；`CommitAll` 自身也拒绝
+对「非仓库根」的目录提交（最后一道防线）；`kb init` 会提示把该目录加进外层
+仓库的 `.gitignore`。回归测试见 `TestInitInsideExistingRepoCreatesNestedRepo`。
+
+### 多知识库共存
+
+监听端口可用环境变量覆盖，避免同一台机器上多个知识库抢 7777/7778：
+
+```bash
+KB_WEBHOOK_PORT=7877 KB_UI_PORT=7878 kb serve --kb ~/other-kb
+```
+
+
 ---
 
 ## 开发

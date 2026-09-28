@@ -3,6 +3,7 @@ package cli
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -59,10 +60,10 @@ func newInitCommand() *cobra.Command {
 
 			resolved := config.ExpandUser(path)
 			knowledgeBase, err := kb.Init(resolved, kb.InitOptions{
-				Repos:      repos,
-				Force:      true,
-				AutoCommit: !noAutoCommit,
-				NoGit:      noGit,
+				Repos:             repos,
+				Force:             true,
+				DisableAutoCommit: noAutoCommit,
+				NoGit:             noGit,
 			})
 			if err != nil {
 				return err
@@ -83,6 +84,16 @@ func newInitCommand() *cobra.Command {
 			fmt.Println("  kb add \"偶发 502 超时\" --at pkg/db/pool.go --repo <仓库名>")
 			fmt.Println("  kb install-hook <代码仓库路径>     # 装 git hook，代码变更后自动标记过期")
 			fmt.Println("  kb serve                           # 启动 webhook 服务与 Web UI")
+
+			// 知识库建在别的仓库内部时，它自己仍是一个嵌套的独立仓库；
+			// 但外层仓库会把它当成未跟踪内容，得提醒加 .gitignore。
+			if !noGit {
+				if outer, outerErr := gitx.RepoRoot(filepath.Dir(knowledgeBase.Config.Root)); outerErr == nil && outer != "" {
+					warnf("知识库位于另一个 git 仓库内部：%s", outer)
+					warnf("它已拥有自己的 .git（私有历史互不影响），但请把 %q 加入该仓库的 .gitignore",
+						filepath.Base(knowledgeBase.Config.Root))
+				}
+			}
 			return nil
 		},
 	}
