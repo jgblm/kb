@@ -1,0 +1,31 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/stone/kb/schema/manifest.schema.json",
+  "title": "kb 索引文件 kb/.kb-manifest.yaml",
+  "description": "派生索引。唯一事实来源是各 md 文件的 frontmatter，本文件随时可用 `kb reindex` 重建，因此损坏不致命。",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["version", "entries"],
+  "properties": {
+    "version": {
+      "type": "integer",
+      "const": 1,
+      "description": "索引格式版本。破坏性变更时递增，供未来做迁移。"
+    },
+    "generated_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "本文件最后写入时间。纯展示用，不参与语义。"
+    },
+    "count": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "entries 长度。冗余字段，便于人快速看出规模与 diff。"
+    },
+    "entries": {
+      "type": "array",
+      "items": { "$ref": "https://github.com/stone/kb/schema/entry.schema.json" },
+      "description": "按 updated_at 升序排列（便于 git diff 时新增内容总在尾部）。"
+    }
+  }
+}

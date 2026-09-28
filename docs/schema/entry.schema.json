@@ -1,0 +1,128 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/stone/kb/schema/entry.schema.json",
+  "title": "kb 知识条目（manifest 中的一条）",
+  "description": "对应 .kb-manifest.yaml 的 entries[] 元素，也对应 model.Entry。正文不在其中，正文在 md 文件里。",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["id", "symptom", "type", "confidence", "doc_path", "created_at", "updated_at", "status"],
+  "properties": {
+    "id": {
+      "type": "string",
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}-.*$|^[A-Za-z0-9._-]+$",
+      "description": "条目唯一标识，约定为 <YYYY-MM-DD>-<slug>。slug 保留中文。",
+      "examples": ["2026-01-15-pool-leak", "2026-09-28-偶发-502-超时"]
+    },
+    "symptom": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 200,
+      "description": "症状/主题。写成「现场能想起来的那句话」，这是检索主键。",
+      "examples": ["偶发 502 超时"]
+    },
+    "keywords": {
+      "type": "array",
+      "items": { "type": "string", "minLength": 1 },
+      "maxItems": 16,
+      "description": "检索关键词。由症状自动抽取，可人工补充。",
+      "examples": [["502", "超时", "连接池", "timeout"]]
+    },
+    "type": {
+      "type": "string",
+      "enum": ["incident", "decision", "constraint", "note"],
+      "description": "incident=事故/踩坑，decision=设计决策，constraint=隐性约束，note=一般笔记"
+    },
+    "confidence": {
+      "type": "string",
+      "enum": ["verified", "unverified"],
+      "description": "人工声明的主观可信度。**只由人写**，机器不改。",
+      "default": "unverified"
+    },
+    "status": {
+      "type": "string",
+      "enum": ["fresh", "stale"],
+      "description": "机器推导的时效状态。**只由哈希比对引擎写**，人不手改。无锚点的条目恒为 fresh。",
+      "default": "fresh"
+    },
+    "anchor": {
+      "description": "代码锚点。省略表示这是跨系统的全局知识，不参与过期追踪。",
+      "oneOf": [
+        { "$ref": "#/$defs/anchor" },
+        { "type": "null" }
+      ]
+    },
+    "doc_path": {
+      "type": "string",
+      "description": "相对 <kb-root>/kb/ 的 POSIX 路径。镜像规则：<repo>/<代码目录>/<代码文件名去扩展名>.md",
+      "pattern": "^[^\\\\]+$",
+      "examples": ["auth-service/pkg/db/pool.md", "incidents/2026-09-28-redis-oom.md"]
+    },
+    "created_at": { "$ref": "#/$defs/timestamp" },
+    "updated_at": { "$ref": "#/$defs/timestamp" },
+    "stale_since": {
+      "$ref": "#/$defs/timestamp",
+      "description": "首次被标记 stale 的时间。仅在 status=stale 时出现。恢复 fresh 后清空。"
+    },
+    "stale_reason": {
+      "type": "string",
+      "enum": ["content-changed", "file-missing", "repo-not-configured"],
+      "description": "过期原因。content-changed=文件内容哈希与基线不一致；file-missing=锚点文件不存在；repo-not-configured=锚点仓库已从配置移除。"
+    },
+    "drifted_from": {
+      "type": "string",
+      "description": "若该条目因代码文件改名/移动而被 kb migrate 迁移过，这里记录迁移前的代码路径。"
+    }
+  },
+  "dependentRequired": {
+    "stale_reason": ["stale_since"],
+    "stale_since": ["stale_reason"]
+  },
+  "$defs": {
+    "timestamp": {
+      "type": "string",
+      "format": "date-time",
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$",
+      "description": "ISO-8601 UTC，秒精度，带 Z 后缀（Go time.RFC3339 输出）。",
+      "examples": ["2026-01-15T10:00:00Z"]
+    },
+    "anchor": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["repo", "path"],
+      "properties": {
+        "repo": {
+          "type": "string",
+          "minLength": 1,
+          "description": "仓库名，需与 .kb/config.yaml 的 repos[].name 对应。"
+        },
+        "path": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "^[^\\\\]",
+          "description": "相对代码仓库根的 POSIX 路径（不含仓库名前缀）。",
+          "examples": ["pkg/db/pool.go"]
+        },
+        "commit": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{4,40}$",
+          "description": "记录时所在仓库的短 commit hash（仅作溯源，不参与过期判定）。"
+        },
+        "branch": {
+          "type": "string",
+          "description": "记录时的分支名。"
+        },
+        "hash": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "description": "记录时的**整文件**内容哈希，是过期判定的唯一依据。文件不存在时为 null/省略。"
+        },
+        "lines": {
+          "type": "string",
+          "pattern": "^[0-9]+(-[0-9]+)?$",
+          "description": "相关行范围，仅用于人读与 UI 展示。",
+          "examples": ["120-180", "42"]
+        }
+      }
+    }
+  }
+}

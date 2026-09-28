@@ -1,0 +1,75 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/stone/kb/schema/frontmatter.schema.json",
+  "title": "kb 知识文档 md frontmatter",
+  "description": "md 文件头部的 YAML frontmatter。这是唯一事实来源；manifest 由它派生。人工可以直接编辑这里。",
+  "type": "object",
+  "additionalProperties": true,
+  "required": ["id", "symptom"],
+  "properties": {
+    "id": {
+      "type": "string",
+      "minLength": 1,
+      "description": "条目唯一标识，须与 manifest 中的 id 一致。缺 id 的 md 会被 kb reindex 跳过并在输出里告警。"
+    },
+    "symptom": {
+      "type": "string",
+      "minLength": 1,
+      "description": "症状/主题。缺省时回退为 id。"
+    },
+    "type": {
+      "type": "string",
+      "enum": ["incident", "decision", "constraint", "note"],
+      "default": "note"
+    },
+    "confidence": {
+      "type": "string",
+      "enum": ["verified", "unverified"],
+      "default": "unverified",
+      "description": "人工声明。改这里即可，kb reindex 会同步到索引。"
+    },
+    "status": {
+      "type": "string",
+      "enum": ["fresh", "stale"],
+      "description": "机器维护字段。人不建议手改——手改成 fresh 不会刷新基线哈希，下次变更仍会再次提示；请用 `kb recover <id>`。"
+    },
+    "keywords": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "anchor": {
+      "type": "string",
+      "pattern": "^[^/]+/.+$",
+      "description": "压平写法：`<repo>/<代码路径>[:<行范围>]`。镜像规则让「文档路径 ↔ 代码路径」双向可推，所以 frontmatter 里不需要重复存 repo/path 两个字段。",
+      "examples": ["auth-service/pkg/db/pool.go", "auth-service/pkg/db/pool.go:120-180"]
+    },
+    "anchor_hash": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "description": "锚点文件在记录时的整文件 sha256。这是过期判定的基线。"
+    },
+    "anchor_commit": {
+      "type": "string",
+      "description": "记录时的短 commit hash，供人工对照历史。"
+    },
+    "stale_reason": {
+      "type": "string",
+      "enum": ["content-changed", "file-missing", "repo-not-configured"],
+      "description": "仅 status=stale 时写入。"
+    },
+    "created_at": { "type": "string", "format": "date-time" },
+    "updated_at": { "type": "string", "format": "date-time" }
+  },
+  "allOf": [
+    {
+      "description": "有锚点的条目应当带基线哈希，否则无法做过期判定。",
+      "if": { "required": ["anchor"] },
+      "then": { "required": ["anchor_hash"] }
+    },
+    {
+      "description": "stale 必须说明原因。",
+      "if": { "properties": { "status": { "const": "stale" } }, "required": ["status"] },
+      "then": { "required": ["stale_reason"] }
+    }
+  ]
+}

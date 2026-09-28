@@ -1,0 +1,741 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>kb · 个人代码知识库</title>
+<style>
+  :root{
+    --bg:#f5f6f8; --panel:#ffffff; --panel-2:#fafbfc; --border:#e3e6ea; --border-strong:#d2d6db;
+    --text:#1f2329; --muted:#8f959e; --muted-2:#646a73;
+    --accent:#326bf6; --accent-soft:#eaf1ff;
+    --stale:#c8730c; --stale-soft:#fff6e6;
+    --ok:#17803d; --ok-soft:#e8f6ed;
+    --warn:#b23a2f; --warn-soft:#fdecea;
+    --radius:8px;
+    --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,"Liberation Mono",monospace;
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%}
+  body{
+    margin:0;background:var(--bg);color:var(--text);
+    font:14px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;
+    -webkit-font-smoothing:antialiased;
+  }
+  button{font:inherit;cursor:pointer}
+  input,textarea,select{font:inherit;color:inherit}
+
+  /* ---------- 布局 ---------- */
+  .app{display:flex;flex-direction:column;height:100vh}
+  header.top{
+    display:flex;align-items:center;gap:14px;padding:10px 16px;
+    background:var(--panel);border-bottom:1px solid var(--border);flex:0 0 auto;
+  }
+  .brand{font-weight:650;letter-spacing:.3px;display:flex;align-items:center;gap:8px}
+  .brand .dot{width:8px;height:8px;border-radius:50%;background:var(--accent)}
+  .brand small{color:var(--muted);font-weight:400;font-size:12px}
+  .grow{flex:1}
+  .chips{display:flex;gap:8px;flex-wrap:wrap}
+  .chip{
+    display:inline-flex;align-items:center;gap:6px;padding:3px 10px;border-radius:999px;
+    background:var(--panel-2);border:1px solid var(--border);font-size:12px;color:var(--muted-2);
+  }
+  .chip b{color:var(--text);font-weight:600}
+  .chip.stale{background:var(--stale-soft);border-color:#f1d9ae;color:var(--stale)}
+  .chip.stale b{color:var(--stale)}
+
+  .body{display:flex;flex:1;min-height:0}
+  aside{
+    width:330px;flex:0 0 330px;background:var(--panel);border-right:1px solid var(--border);
+    display:flex;flex-direction:column;min-height:0;
+  }
+  .searchbar{padding:10px 12px;border-bottom:1px solid var(--border);display:flex;gap:8px;flex-direction:column}
+  .searchbar input{
+    width:100%;padding:8px 10px;border:1px solid var(--border-strong);border-radius:var(--radius);
+    background:var(--panel-2);outline:none;
+  }
+  .searchbar input:focus{border-color:var(--accent);background:#fff;box-shadow:0 0 0 3px var(--accent-soft)}
+  .filters{display:flex;gap:6px;flex-wrap:wrap}
+  .filters select{
+    padding:4px 6px;border:1px solid var(--border);border-radius:6px;background:var(--panel-2);font-size:12px;color:var(--muted-2)
+  }
+  .tree{overflow:auto;padding:8px 6px 24px;flex:1;min-height:0}
+  .node{
+    display:flex;align-items:center;gap:6px;padding:3px 8px;border-radius:6px;cursor:pointer;
+    font-size:13px;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+  }
+  .node:hover{background:var(--panel-2)}
+  .node.active{background:var(--accent-soft);color:var(--accent)}
+  .node .caret{width:14px;color:var(--muted);flex:0 0 14px;text-align:center;font-size:10px}
+  .node .label{overflow:hidden;text-overflow:ellipsis}
+  .node .mark{width:6px;height:6px;border-radius:50%;flex:0 0 6px;background:#cfd4da}
+  .node .mark.stale{background:var(--stale)}
+  .node .mark.fresh{background:var(--ok)}
+  .node .fname{color:var(--muted-2);font-size:12px;font-family:var(--mono)}
+  .children{margin-left:12px;border-left:1px dashed var(--border);padding-left:2px}
+
+  main{flex:1;min-width:0;display:flex;flex-direction:column}
+  .toolbar{
+    display:flex;align-items:center;gap:8px;padding:10px 16px;background:var(--panel);
+    border-bottom:1px solid var(--border);flex:0 0 auto;flex-wrap:wrap;
+  }
+  .btn{
+    padding:5px 12px;border-radius:6px;border:1px solid var(--border-strong);background:var(--panel);
+    color:var(--text);font-size:13px;
+  }
+  .btn:hover{background:var(--panel-2)}
+  .btn.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+  .btn.primary:hover{filter:brightness(.95)}
+  .btn.ghost{border-color:transparent;color:var(--muted-2)}
+  .btn.ghost:hover{background:var(--panel-2);color:var(--text)}
+  .btn:disabled{opacity:.5;cursor:not-allowed}
+  .seg{display:inline-flex;border:1px solid var(--border-strong);border-radius:6px;overflow:hidden}
+  .seg button{border:0;background:var(--panel);padding:5px 12px;font-size:13px;color:var(--muted-2)}
+  .seg button.on{background:var(--accent-soft);color:var(--accent);font-weight:600}
+
+  .content{flex:1;min-height:0;overflow:auto;padding:18px 24px 60px}
+  .card{background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:18px 20px;max-width:900px}
+  h1.title{font-size:19px;margin:0 0 6px;line-height:1.35}
+  .meta{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:10px 0 16px}
+  .tag{font-size:11px;padding:2px 8px;border-radius:999px;border:1px solid var(--border);background:var(--panel-2);color:var(--muted-2)}
+  .tag.t-incident{background:var(--warn-soft);border-color:#f3cfc9;color:var(--warn)}
+  .tag.t-decision{background:var(--accent-soft);border-color:#cddcff;color:var(--accent)}
+  .tag.t-constraint{background:#f4f0ff;border-color:#ddd2f7;color:#6a45c7}
+  .tag.t-note{background:var(--panel-2)}
+  .tag.ok{background:var(--ok-soft);border-color:#c6e6d2;color:var(--ok)}
+  .tag.stale{background:var(--stale-soft);border-color:#f1d9ae;color:var(--stale)}
+  .anchorline{font-family:var(--mono);font-size:12px;color:var(--muted-2);background:var(--panel-2);
+    border:1px solid var(--border);border-radius:6px;padding:6px 10px;display:inline-block}
+
+  .banner{
+    display:flex;gap:10px;align-items:flex-start;padding:10px 12px;border-radius:8px;margin:0 0 16px;font-size:13px;
+  }
+  .banner.stale{background:var(--stale-soft);border:1px solid #f1d9ae;color:#8a5009}
+  .banner.info{background:var(--accent-soft);border:1px solid #cddcff;color:#2a56c6}
+
+  .md h1,.md h2,.md h3{line-height:1.4;margin:22px 0 8px}
+  .md h1{font-size:18px} .md h2{font-size:16px;padding-bottom:5px;border-bottom:1px solid var(--border)}
+  .md h3{font-size:14px}
+  .md p{margin:8px 0}
+  .md ul,.md ol{margin:8px 0;padding-left:22px}
+  .md li{margin:3px 0}
+  .md code{font-family:var(--mono);font-size:12.5px;background:var(--panel-2);
+    border:1px solid var(--border);border-radius:4px;padding:1px 5px}
+  .md pre{background:#f7f8fa;border:1px solid var(--border);border-radius:8px;padding:12px;overflow:auto;margin:10px 0}
+  .md pre code{background:none;border:0;padding:0;font-size:12.5px;line-height:1.55}
+  .md blockquote{margin:10px 0;padding:4px 14px;border-left:3px solid var(--border-strong);color:var(--muted-2)}
+  .md table{border-collapse:collapse;margin:10px 0;font-size:13px}
+  .md th,.md td{border:1px solid var(--border);padding:5px 10px;text-align:left}
+  .md th{background:var(--panel-2)}
+  .md hr{border:0;border-top:1px solid var(--border);margin:18px 0}
+  .md a{color:var(--accent);text-decoration:none}
+  .md a:hover{text-decoration:underline}
+  .md pre.mermaid{background:#fbfcfe;border-color:#dbe4f5}
+  .md pre.mermaid::before{
+    content:"mermaid 源码（可 diff / 可 review）";display:block;font-size:11px;color:var(--muted);
+    margin-bottom:6px;font-family:inherit;
+  }
+
+  textarea.editor{
+    width:100%;min-height:52vh;border:1px solid var(--border-strong);border-radius:8px;padding:12px;
+    font-family:var(--mono);font-size:13px;line-height:1.6;background:var(--panel);resize:vertical;outline:none;
+  }
+  textarea.editor:focus{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-soft)}
+
+  .empty{color:var(--muted);text-align:center;padding:60px 20px;font-size:13px}
+  .toast{
+    position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:#1f2329;color:#fff;
+    padding:9px 16px;border-radius:8px;font-size:13px;opacity:0;pointer-events:none;transition:opacity .18s;z-index:50;
+  }
+  .toast.show{opacity:1}
+  .toast.err{background:var(--warn)}
+
+  dialog{border:0;border-radius:12px;padding:0;box-shadow:0 18px 50px rgba(0,0,0,.16);max-width:560px;width:92%}
+  dialog::backdrop{background:rgba(20,22,26,.35)}
+  .dlg{padding:18px 20px}
+  .dlg h3{margin:0 0 14px;font-size:15px}
+  .field{margin-bottom:10px;display:flex;flex-direction:column;gap:5px}
+  .field label{font-size:12px;color:var(--muted-2)}
+  .field input,.field select,.field textarea{
+    padding:7px 9px;border:1px solid var(--border-strong);border-radius:6px;background:var(--panel);outline:none;
+  }
+  .field input:focus,.field select:focus,.field textarea:focus{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-soft)}
+  .row{display:flex;gap:10px}
+  .row > .field{flex:1}
+  .dlg-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:16px}
+</style>
+</head>
+<body>
+<div class="app">
+  <header class="top">
+    <div class="brand"><span class="dot"></span>kb <small id="root-label">个人代码知识库</small></div>
+    <div class="grow"></div>
+    <div class="chips" id="chips"></div>
+    <button class="btn" id="btn-new">＋ 记录一条</button>
+  </header>
+
+  <div class="body">
+    <aside>
+      <div class="searchbar">
+        <input id="q" type="search" placeholder="按症状检索，例如 502 / 超时 / 连接池" autocomplete="off">
+        <div class="filters">
+          <select id="f-repo"><option value="">全部仓库</option></select>
+          <select id="f-type">
+            <option value="">全部类型</option>
+            <option value="incident">incident 踩坑</option>
+            <option value="decision">decision 决策</option>
+            <option value="constraint">constraint 约束</option>
+            <option value="note">note 笔记</option>
+          </select>
+          <select id="f-status">
+            <option value="">全部状态</option>
+            <option value="stale">仅过期</option>
+            <option value="fresh">仅新鲜</option>
+          </select>
+        </div>
+      </div>
+      <div class="tree" id="tree"></div>
+    </aside>
+
+    <main>
+      <div class="toolbar">
+        <div class="seg">
+          <button id="tab-view" class="on">预览</button>
+          <button id="tab-edit">编辑</button>
+        </div>
+        <div class="grow"></div>
+        <button class="btn ghost" id="btn-reload">重新加载</button>
+        <button class="btn" id="btn-recover" style="display:none">确认仍然有效</button>
+        <button class="btn primary" id="btn-save" style="display:none">保存并提交</button>
+      </div>
+      <div class="content" id="content">
+        <div class="empty">从左侧选择一条知识，或点右上角「＋ 记录一条」。</div>
+      </div>
+    </main>
+  </div>
+</div>
+
+<dialog id="dlg-new">
+  <div class="dlg">
+    <h3>记录一条知识</h3>
+    <div class="field">
+      <label>症状 / 主题（必填）</label>
+      <input id="n-symptom" placeholder="偶发 502 超时">
+    </div>
+    <div class="row">
+      <div class="field">
+        <label>代码锚点（可选，相对仓库根）</label>
+        <input id="n-at" placeholder="pkg/db/pool.go">
+      </div>
+      <div class="field" style="flex:0 0 150px">
+        <label>仓库</label>
+        <select id="n-repo"></select>
+      </div>
+    </div>
+    <div class="row">
+      <div class="field">
+        <label>类型</label>
+        <select id="n-type">
+          <option value="incident">incident 踩坑</option>
+          <option value="decision">decision 决策</option>
+          <option value="constraint">constraint 约束</option>
+          <option value="note">note 笔记</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>可信度</label>
+        <select id="n-conf">
+          <option value="unverified">unverified 未验证</option>
+          <option value="verified">verified 已验证</option>
+        </select>
+      </div>
+    </div>
+    <div class="field">
+      <label>正文（可留空，稍后补）</label>
+      <textarea id="n-body" rows="4" placeholder="## 现象&#10;..."></textarea>
+    </div>
+    <div class="dlg-actions">
+      <button class="btn ghost" id="n-cancel">取消</button>
+      <button class="btn primary" id="n-create">创建</button>
+    </div>
+  </div>
+</dialog>
+
+<div class="toast" id="toast"></div>
+
+<script>
+(function(){
+  "use strict";
+  const $ = (id) => document.getElementById(id);
+  const state = { current:null, mode:"view", dirty:false, drafts:{} };
+
+  /* ---------------- 基础工具 ---------------- */
+  function esc(s){
+    return String(s == null ? "" : s).replace(/[&<>"']/g, (c) => (
+      {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]
+    ));
+  }
+  let toastTimer = null;
+  function toast(msg, isErr){
+    const el = $("toast");
+    el.textContent = msg;
+    el.className = "toast show" + (isErr ? " err" : "");
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => { el.className = "toast"; }, 2400);
+  }
+  async function api(path, options){
+    const res = await fetch(path, options);
+    let data = null;
+    try { data = await res.json(); } catch(e){ data = null; }
+    if (!res.ok) throw new Error((data && data.error) || ("HTTP " + res.status));
+    return data;
+  }
+
+  /* ---------------- Markdown 渲染 ---------------- */
+  function inline(text){
+    let out = esc(text);
+    out = out.replace(/`([^`]+)`/g, (m, code) => "<code>" + code + "</code>");
+    out = out.replace(/!\[([^\]]*)\]\(([^)]+)\)/g, (m, alt, src) => '<a href="' + src + '" target="_blank">' + (alt || src) + "</a>");
+    out = out.replace(/\[([^\]]+)\]\(([^)]+)\)/g, (m, label, href) =>
+      '<a href="' + href + '" target="_blank" rel="noreferrer">' + label + "</a>");
+    out = out.replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>");
+    out = out.replace(/(^|[^*])\*([^*\n]+)\*/g, "$1<em>$2</em>");
+    out = out.replace(/~~([^~]+)~~/g, "<del>$1</del>");
+    return out;
+  }
+
+  function renderMarkdown(src){
+    const lines = String(src || "").split("\n");
+    const html = [];
+    let i = 0;
+
+    function flushParagraph(buf){
+      if (buf.length){ html.push("<p>" + inline(buf.join(" ")) + "</p>"); buf.length = 0; }
+    }
+
+    while (i < lines.length){
+      const line = lines[i];
+
+      // 代码围栏
+      const fence = line.match(/^\s*```(\S*)\s*$/);
+      if (fence){
+        const lang = (fence[1] || "").toLowerCase();
+        const cls = lang === "mermaid" ? "mermaid" : "";
+        const buf = [];
+        i++;
+        while (i < lines.length && !/^\s*```\s*$/.test(lines[i])) { buf.push(lines[i]); i++; }
+        i++;
+        html.push('<pre class="' + cls + '"><code>' + esc(buf.join("\n")) + "</code></pre>");
+        continue;
+      }
+
+      // 表格
+      if (/^\s*\|/.test(line) && i + 1 < lines.length && /^\s*\|?[\s:|-]+\|/.test(lines[i+1])){
+        const head = splitRow(line);
+        i += 2;
+        const rows = [];
+        while (i < lines.length && /^\s*\|/.test(lines[i])) { rows.push(splitRow(lines[i])); i++; }
+        html.push("<table><thead><tr>" + head.map((c) => "<th>" + inline(c) + "</th>").join("") + "</tr></thead><tbody>" +
+          rows.map((r) => "<tr>" + r.map((c) => "<td>" + inline(c) + "</td>").join("") + "</tr>").join("") +
+          "</tbody></table>");
+        continue;
+      }
+
+      // 标题
+      const heading = line.match(/^(#{1,6})\s+(.*)$/);
+      if (heading){
+        const level = Math.min(heading[1].length, 3);
+        html.push("<h" + level + ">" + inline(heading[2]) + "</h" + level + ">");
+        i++; continue;
+      }
+
+      // 分隔线
+      if (/^\s*([-*_])\1{2,}\s*$/.test(line)){ html.push("<hr>"); i++; continue; }
+
+      // 引用
+      if (/^\s*>\s?/.test(line)){
+        const buf = [];
+        while (i < lines.length && /^\s*>\s?/.test(lines[i])) { buf.push(lines[i].replace(/^\s*>\s?/, "")); i++; }
+        html.push("<blockquote>" + renderMarkdown(buf.join("\n")) + "</blockquote>");
+        continue;
+      }
+
+      // 列表
+      if (/^\s*([-*+]|\d+\.)\s+/.test(line)){
+        const ordered = /^\s*\d+\./.test(line);
+        const items = [];
+        while (i < lines.length && /^\s*([-*+]|\d+\.)\s+/.test(lines[i])){
+          items.push(lines[i].replace(/^\s*([-*+]|\d+\.)\s+/, ""));
+          i++;
+        }
+        const tag = ordered ? "ol" : "ul";
+        html.push("<" + tag + ">" + items.map((t) => "<li>" + inline(t) + "</li>").join("") + "</" + tag + ">");
+        continue;
+      }
+
+      // 段落
+      if (/^\s*$/.test(line)){ i++; continue; }
+      const buf = [];
+      while (i < lines.length && !/^\s*$/.test(lines[i]) &&
+             !/^\s*(```|#{1,6}\s|>|[-*+]\s|\d+\.\s|\|)/.test(lines[i])){
+        buf.push(lines[i]); i++;
+      }
+      flushParagraph(buf);
+    }
+    return html.join("\n");
+  }
+
+  function splitRow(line){
+    return line.trim().replace(/^\||\|$/g, "").split("|").map((c) => c.trim());
+  }
+
+  /* ---------------- 渲染 ---------------- */
+  function typeLabel(t){
+    return { incident:"incident 踩坑", decision:"decision 决策", constraint:"constraint 约束", note:"note 笔记" }[t] || t;
+  }
+  function confLabel(c){ return c === "verified" ? "已验证" : "未验证"; }
+
+  function renderChips(stats){
+    $("chips").innerHTML =
+      '<span class="chip">共 <b>' + stats.total + '</b> 条</span>' +
+      '<span class="chip">已锚定 <b>' + stats.anchored + '</b></span>' +
+      (stats.stale > 0
+        ? '<span class="chip stale">过期 <b>' + stats.stale + '</b></span>'
+        : '<span class="chip">过期 <b>0</b></span>');
+    $("root-label").textContent = stats.root || "";
+  }
+
+  function renderTree(nodes){
+    function walk(list){
+      return list.map((node) => {
+        if (node.kind === "dir"){
+          const open = node._open !== false;
+          return '<div>' +
+            '<div class="node" data-dir="' + esc(node.path) + '">' +
+              '<span class="caret">' + (open ? "▾" : "▸") + '</span>' +
+              '<span class="label">' + esc(node.name) + '</span>' +
+            '</div>' +
+            '<div class="children"' + (open ? "" : ' style="display:none"') + '>' +
+              (node.children ? walk(node.children) : "") +
+            '</div></div>';
+        }
+        const stale = node.status === "stale";
+        return '<div class="node" data-id="' + esc(node.id) + '">' +
+          '<span class="caret"></span>' +
+          '<span class="mark ' + (stale ? "stale" : "fresh") + '"></span>' +
+          '<span class="label" title="' + esc(node.symptom) + '">' + esc(node.name) + '</span>' +
+        '</div>';
+      }).join("");
+    }
+    $("tree").innerHTML = nodes.length ? walk(nodes) : '<div class="empty">还没有任何条目</div>';
+  }
+
+  function renderDetail(detail){
+    const e = detail.entry, ev = detail.eval || {};
+    const stale = e.status === "stale";
+    const banner = stale
+      ? '<div class="banner stale"><strong>⚠️ 锚定代码已变更</strong><div>原因：' +
+        esc(reasonLabel(ev.reason)) + '。笔记可能已经过时，请复核后点「确认仍然有效」，或直接编辑。</div></div>'
+      : "";
+
+    const keywords = (e.keywords || []).map((k) => '<span class="tag">#' + esc(k) + '</span>').join(" ");
+
+    $("content").innerHTML =
+      '<div class="card">' +
+        banner +
+        '<h1 class="title">' + esc(e.symptom) + '</h1>' +
+        '<div class="meta">' +
+          '<span class="tag t-' + esc(e.type) + '">' + esc(typeLabel(e.type)) + '</span>' +
+          '<span class="tag ' + (stale ? "stale" : "ok") + '">' + (stale ? "stale 已过期" : "fresh 新鲜") + '</span>' +
+          '<span class="tag ' + (e.confidence === "verified" ? "ok" : "") + '">' + esc(confLabel(e.confidence)) + '</span>' +
+          '<span class="tag">' + esc(e.id) + '</span>' +
+        '</div>' +
+        (e.anchor ? '<div class="anchorline">' + esc(e.anchor.repo + "/" + e.anchor.path) +
+          (e.anchor.lines ? ":" + esc(e.anchor.lines) : "") +
+          (e.anchor.hash ? "  ·  " + esc(String(e.anchor.hash).slice(0, 20)) + "…" : "") + '</div>' : "") +
+        (keywords ? '<div class="meta">' + keywords + '</div>' : "") +
+        '<div class="md">' + renderMarkdown(detail.body || "_(空)_") + '</div>' +
+      '</div>';
+
+    $("btn-recover").style.display = stale ? "" : "none";
+    $("btn-recover").dataset.id = e.id;
+  }
+
+  function reasonLabel(reason){
+    return ({
+      "content-changed":"文件内容哈希与记录时不一致",
+      "file-missing":"锚点文件已不存在（可能被删除或移动）",
+      "repo-not-configured":"锚点仓库未在配置中"
+    })[reason] || reason || "未知";
+  }
+
+  function renderEditor(detail){
+    const e = detail.entry;
+    $("content").innerHTML =
+      '<div class="card">' +
+        '<h1 class="title">编辑 · ' + esc(e.symptom) + '</h1>' +
+        '<div class="meta"><span class="anchorline">' + (e.anchor ? esc(e.anchor.ref) : esc(e.doc_path)) + '</span></div>' +
+        '<div class="field"><label>可信度</label>' +
+          '<select id="e-conf">' +
+            '<option value="unverified"' + (e.confidence === "unverified" ? " selected" : "") + '>unverified 未验证</option>' +
+            '<option value="verified"' + (e.confidence === "verified" ? " selected" : "") + '>verified 已验证</option>' +
+          '</select></div>' +
+        '<div class="field"><label>正文（Markdown，可直接改 frontmatter 之外的任何内容）</label>' +
+          '<textarea class="editor" id="e-body"></textarea></div>' +
+      '</div>';
+    $("e-body").value = detail.body || "";
+    $("e-body").addEventListener("input", () => { state.dirty = true; });
+    $("e-conf").addEventListener("change", () => { state.dirty = true; });
+  }
+
+  /* ---------------- 数据加载 ---------------- */
+  async function loadStats(){
+    try { renderChips(await api("/api/stats")); } catch(e){ /* 忽略 */ }
+  }
+
+  async function loadTree(){
+    try {
+      const data = await api("/api/tree");
+      state.treeCache = data.tree || [];
+      applyTreeState();
+      renderTree(state.treeCache);
+    } catch(e){ toast("加载目录树失败：" + e.message, true); }
+  }
+
+  function applyTreeState(){
+    (function walk(list){
+      list.forEach((node) => {
+        if (node.kind === "dir"){
+          if (node._open === undefined) node._open = (node.path || "").split("/").length <= 1;
+          if (node.children) walk(node.children);
+        }
+      });
+    })(state.treeCache || []);
+  }
+
+  function findNodeByPath(list, path){
+    for (const node of list){
+      if (node.path === path) return node;
+      if (node.children){
+        const hit = findNodeByPath(node.children, path);
+        if (hit) return hit;
+      }
+    }
+    return null;
+  }
+
+  async function loadList(){
+    const q = $("q").value.trim();
+    const params = new URLSearchParams();
+    if (q) params.set("q", q);
+    if ($("f-repo").value) params.set("repo", $("f-repo").value);
+    if ($("f-type").value) params.set("type", $("f-type").value);
+    if ($("f-status").value) params.set("status", $("f-status").value);
+
+    const data = await api("/api/entries?" + params.toString());
+
+    if (!q){
+      // 无查询词时仍显示目录树，但把筛选结果作为列表视图
+      const filtered = data.entries || [];
+      if ($("f-repo").value || $("f-type").value || $("f-status").value){
+        renderFlatList(filtered, data.total);
+        return;
+      }
+      await loadTree();
+      return;
+    }
+
+    const hits = data.hits || [];
+    if (!hits.length){
+      $("content").innerHTML = '<div class="empty">没有命中「' + esc(q) + '」的条目</div>';
+      return;
+    }
+    $("content").innerHTML = '<div class="card"><h1 class="title">检索：' + esc(q) + '</h1>' +
+      '<div class="meta"><span class="tag">' + hits.length + ' 条命中</span></div>' +
+      hits.map((hit) => {
+        const e = hit.entry;
+        const snippet = (hit.snippets || []).slice(0, 2)
+          .map((s) => '<pre><code>' + esc(s.text) + "</code></pre>").join("");
+        return '<div style="padding:12px 0;border-bottom:1px solid var(--border)">' +
+          '<div class="node" data-id="' + esc(e.id) + '" style="padding:0">' +
+            '<span class="mark ' + (e.status === "stale" ? "stale" : "fresh") + '"></span>' +
+            '<span class="label" style="font-weight:600">' + esc(e.symptom) + '</span>' +
+            '<span class="tag t-' + esc(e.type) + '" style="margin-left:8px">' + esc(e.type) + '</span>' +
+            '<span class="tag" style="margin-left:6px">得分 ' + (hit.score || 0).toFixed(1) + '</span>' +
+          '</div>' +
+          (e.anchor ? '<div class="anchorline" style="margin:6px 0 0">' + esc(e.anchor.ref) + '</div>' : "") +
+          snippet + '</div>';
+      }).join("") + "</div>";
+  }
+
+  function renderFlatList(entries, total){
+    if (!entries.length){
+      $("content").innerHTML = '<div class="empty">没有符合条件的条目</div>';
+      return;
+    }
+    $("content").innerHTML = '<div class="card"><h1 class="title">筛选结果</h1>' +
+      '<div class="meta"><span class="tag">' + (total || entries.length) + ' 条</span></div>' +
+      entries.map((e) => '<div style="padding:10px 0;border-bottom:1px solid var(--border)">' +
+        '<div class="node" data-id="' + esc(e.id) + '" style="padding:0">' +
+          '<span class="mark ' + (e.status === "stale" ? "stale" : "fresh") + '"></span>' +
+          '<span class="label" style="font-weight:600">' + esc(e.symptom) + '</span>' +
+          '<span class="tag t-' + esc(e.type) + '" style="margin-left:8px">' + esc(e.type) + '</span>' +
+        '</div>' +
+        '<div class="anchorline" style="margin-top:6px">' + esc(e.anchor ? e.anchor.ref : e.doc_path) + '</div>' +
+      "</div>").join("") + "</div>";
+  }
+
+  async function openEntry(id){
+    try {
+      const detail = await api("/api/entry?id=" + encodeURIComponent(id));
+      state.current = detail;
+      state.dirty = false;
+      setMode("view");
+      renderDetail(detail);
+      document.querySelectorAll(".node.active").forEach((el) => el.classList.remove("active"));
+      document.querySelectorAll('.node[data-id="' + id + '"]').forEach((el) => el.classList.add("active"));
+    } catch(e){ toast("打开失败：" + e.message, true); }
+  }
+
+  function setMode(mode){
+    state.mode = mode;
+    $("tab-view").className = mode === "view" ? "on" : "";
+    $("tab-edit").className = mode === "edit" ? "on" : "";
+    $("btn-save").style.display = mode === "edit" ? "" : "none";
+  }
+
+  async function saveEntry(){
+    if (!state.current) return;
+    const body = $("e-body").value;
+    const confidence = $("e-conf").value;
+    try {
+      const detail = await api("/api/entry", {
+        method:"PUT",
+        headers:{"Content-Type":"application/json"},
+        body: JSON.stringify({ id: state.current.entry.id, body: body, confidence: confidence })
+      });
+      state.current = detail;
+      state.dirty = false;
+      setMode("view");
+      renderDetail(detail);
+      loadStats();
+      loadTree();
+      toast("已保存并提交");
+    } catch(e){ toast("保存失败：" + e.message, true); }
+  }
+
+  async function recover(){
+    const id = $("btn-recover").dataset.id;
+    if (!id) return;
+    try {
+      const detail = await api("/api/recover", {
+        method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify({ id: id })
+      });
+      state.current = detail;
+      renderDetail(detail);
+      loadStats(); loadTree();
+      toast("已确认为有效，基线哈希已刷新");
+    } catch(e){ toast("操作失败：" + e.message, true); }
+  }
+
+  async function createEntry(){
+    const payload = {
+      symptom: $("n-symptom").value.trim(),
+      at: $("n-at").value.trim(),
+      repo: $("n-repo").value,
+      type: $("n-type").value,
+      confidence: $("n-conf").value,
+      body: $("n-body").value
+    };
+    if (!payload.symptom){ toast("请填写症状/主题", true); return; }
+    try {
+      const result = await api("/api/entry", {
+        method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify(payload)
+      });
+      $("dlg-new").close();
+      ["n-symptom","n-at","n-body"].forEach((id) => { $(id).value = ""; });
+      (result.warnings || []).forEach((w) => toast(w));
+      loadStats(); loadTree();
+      if (result.entry) openEntry(result.entry.id);
+    } catch(e){ toast("创建失败：" + e.message, true); }
+  }
+
+  function fillRepoSelects(){
+    api("/api/stats").then((stats) => {
+      const repos = Object.keys(stats.by_repo || {}).sort();
+      ["f-repo","n-repo"].forEach((id) => {
+        const select = $(id);
+        const first = select.options[0].outerHTML;
+        select.innerHTML = (id === "n-repo" ? '<option value="">（自动/不锚定）</option>' : first)
+          + repos.map((r) => '<option value="' + esc(r) + '">' + esc(r) + "</option>").join("");
+      });
+    }).catch(() => {});
+  }
+
+  /* ---------------- 事件绑定 ---------------- */
+  let searchTimer = null;
+  $("q").addEventListener("input", () => {
+    clearTimeout(searchTimer);
+    searchTimer = setTimeout(loadList, 180);
+  });
+  ["f-repo","f-type","f-status"].forEach((id) => $(id).addEventListener("change", loadList));
+
+  $("tree").addEventListener("click", (event) => {
+    const entryNode = event.target.closest(".node[data-id]");
+    if (entryNode){ openEntry(entryNode.dataset.id); return; }
+    const dirNode = event.target.closest(".node[data-dir]");
+    if (dirNode){
+      const node = findNodeByPath(state.treeCache || [], dirNode.dataset.dir);
+      if (node){
+        node._open = !(node._open !== false);
+        renderTree(state.treeCache);
+      }
+    }
+  });
+
+  $("content").addEventListener("click", (event) => {
+    const node = event.target.closest(".node[data-id]");
+    if (node) openEntry(node.dataset.id);
+  });
+
+  $("tab-view").addEventListener("click", () => {
+    if (!state.current) return;
+    if (state.mode === "edit" && state.dirty && !confirm("有未保存的修改，确定放弃？")) return;
+    setMode("view");
+    renderDetail(state.current);
+  });
+  $("tab-edit").addEventListener("click", () => {
+    if (!state.current) return;
+    setMode("edit");
+    renderEditor(state.current);
+  });
+  $("btn-save").addEventListener("click", saveEntry);
+  $("btn-recover").addEventListener("click", recover);
+  $("btn-reload").addEventListener("click", () => {
+    loadStats(); loadTree();
+    if (state.current) openEntry(state.current.entry.id);
+  });
+
+  $("btn-new").addEventListener("click", () => { $("dlg-new").showModal(); });
+  $("n-cancel").addEventListener("click", () => $("dlg-new").close());
+  $("n-create").addEventListener("click", createEntry);
+
+  document.addEventListener("keydown", (event) => {
+    if ((event.metaKey || event.ctrlKey) && event.key === "s"){
+      event.preventDefault();
+      if (state.mode === "edit") saveEntry();
+    }
+  });
+
+  /* ---------------- 启动 ---------------- */
+  (async function start(){
+    await loadStats();
+    fillRepoSelects();
+    await loadTree();
+    const first = document.querySelector('.node[data-id]');
+    if (first) openEntry(first.dataset.id);
+  })();
+})();
+</script>
+</body>
+</html>

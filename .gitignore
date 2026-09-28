@@ -1,0 +1,17 @@
+# 构建产物
+bin/
+
+# 本地演示知识库（make demo 生成，内含写死的绝对路径，不应入库）
+demo-kb/
+
+# 自举知识库：kb 用自己管理自己（make dogfood 生成）
+self-kb/
+
+# 工作区元数据（含本机环境笔记，不随公开仓库发布）
+.workbuddy/
+
+# 编辑器 / 系统
+.DS_Store
+.idea/
+.vscode/
+*.swp

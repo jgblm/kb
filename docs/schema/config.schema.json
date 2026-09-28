@@ -1,0 +1,72 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/stone/kb/schema/config.schema.json",
+  "title": "kb 配置 <kb-root>/.kb/config.yaml",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["version"],
+  "properties": {
+    "version": { "type": "integer", "const": 1 },
+    "repos": {
+      "type": "array",
+      "description": "纳管的代码仓库。游离在生产系统之外的路径也可以（kb 只读代码，不写）。",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["name", "path"],
+        "properties": {
+          "name": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9._-]+$",
+            "description": "仓库名。会成为知识目录的第一级（kb/<name>/...）与 hook 上报时的身份。"
+          },
+          "path": {
+            "type": "string",
+            "minLength": 1,
+            "description": "代码仓库绝对路径（支持 ~ 展开）。"
+          },
+          "primary_branch": {
+            "type": "string",
+            "default": "main",
+            "description": "主干分支。webhook 只处理该分支的变更，避免把 feature 分支上的实验代码误判成「锚点已变」。"
+          },
+          "ignore": {
+            "type": "array",
+            "items": { "type": "string" },
+            "description": "glob 模式，命中的文件不参与过期判定。按全路径或 basename 两种方式匹配。",
+            "examples": [["*_test.go", "vendor/*", "**/*.pb.go"]]
+          }
+        }
+      }
+    },
+    "server": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "host": { "type": "string", "default": "127.0.0.1", "description": "仅监听本机，知识库是私有的。" },
+        "webhook_port": { "type": "integer", "minimum": 1, "maximum": 65535, "default": 7777 },
+        "ui_port": { "type": "integer", "minimum": 1, "maximum": 65535, "default": 7778 },
+        "token": {
+          "type": "string",
+          "description": "可选。设置后 hook 必须带 X-KB-Token 头，防止本机其它进程乱写。"
+        }
+      }
+    },
+    "git": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "auto_commit": {
+          "type": "boolean",
+          "default": true,
+          "description": "每次编辑/过期标记后自动 commit。关掉后需手动 git commit。"
+        },
+        "commit_message": {
+          "type": "string",
+          "default": "kb({action}): {id}",
+          "description": "模板，支持 {action} 与 {id} 两个占位符。action 取值：init|add|edit|delete|stale|recover|migrate|reindex|repo|refresh。"
+        }
+      }
+    }
+  }
+}
