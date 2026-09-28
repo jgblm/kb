@@ -115,6 +115,16 @@ func (h *Handler) ServeHTTP(writer http.ResponseWriter, request *http.Request) {
 }
 
 // Handle 执行一次变更检测（不涉及 HTTP）。
+//
+// 契约 —— 调用方（git hook / outbox 补投 / 测试）需要知道的全部：
+//
+//   - 只改条目的 status 与 stale_reason，绝不触碰正文，也不删条目
+//   - 非主干分支、重复 commit 一律跳过，返回 ok:true 并带 skipped / idempotent
+//   - 已处理的 commit 记在 .kb/webhook-state.json，按仓库保留最近 seenLimit 个
+//
+// 已知限制：Seen 检查与 Mark 之间存在一个极小的竞态窗口，两个同时到达的
+// 同一 commit 可能都被处理。实践中 git hook 按仓库串行触发，且重复处理的
+// 后果只是多跑一次幂等的哈希比对，因此不把锁跨越整个处理流程。
 func (h *Handler) Handle(payload Payload) Response {
 	response := Response{OK: true, Repo: payload.Repo, Commit: payload.Commit, Branch: payload.Branch}
 
